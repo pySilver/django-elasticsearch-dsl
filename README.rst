@@ -27,7 +27,26 @@ Features
 
    - Django >= 1.10
    - Python 2.7, 3.5, 3.6, 3.7
-   - Elasticsearch >= 6.0 < 7.0
+
+**Elasticsearch Compatibility:**
+The library is compatible with all Elasticsearch versions since 5.x **but you have to use a matching major version:**
+
+- For Elasticsearch 7.0 and later, use the major version 7 (7.x.y) of the library.
+
+- For Elasticsearch 6.0 and later, use the major version 6 (6.x.y) of the library.
+
+- For Elasticsearch 5.0 and later, use the major version 0.5 (0.5.x) of the library.
+
+.. code-block:: python
+
+    # Elasticsearch 7.x
+    elasticsearch-dsl>=7.0.0,<8.0.0
+
+    # Elasticsearch 6.x
+    elasticsearch-dsl>=6.0.0,<7.0.0
+
+    # Elasticsearch 5.x
+    elasticsearch-dsl>=0.5.1,<6.0.0
 
 .. _Search: http://elasticsearch-dsl.readthedocs.io/en/stable/search_dsl.html
 
@@ -36,7 +55,7 @@ Quickstart
 
 Install Django Elasticsearch DSL::
 
-    pip install https://github.com/sabricot/django-elasticsearch-dsl/archive/6.4.1.tar.gz
+    pip install django-elasticsearch-dsl
 
 
 
@@ -362,7 +381,7 @@ So for example you can use a custom analyzer_:
     html_strip = analyzer(
         'html_strip',
         tokenizer="standard",
-        filter=["standard", "lowercase", "stop", "snowball"],
+        filter=["lowercase", "stop", "snowball"],
         char_filter=["html_strip"]
     )
 
@@ -457,7 +476,7 @@ want to put in this Elasticsearch index and also add the `registry.register_docu
                         'number_of_replicas': 0}
 
         class Django:
-            model = Car
+            model = Manufacturer
             fields = [
                 'name',
                 'country_code',
