@@ -85,10 +85,10 @@ class Command(BaseCommand):
 
     def _populate(self, models, options):
         for doc in registry.get_documents(models):
-            qs = doc().get_indexing_queryset()
             self.stdout.write("Indexing {} '{}' objects".format(
-                qs.count(), doc.django.model.__name__)
+                doc().get_queryset().count(), doc.django.model.__name__)
             )
+            qs = doc().get_indexing_queryset()
             doc().update(qs)
 
     def _delete(self, models, options):
