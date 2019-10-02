@@ -48,63 +48,6 @@ model_field_class_to_field_class = {
     models.URLField: TextField,
 }
 
-class PagingQuerysetProxy(object):
-    """
-    I am a tiny standin for Django Querysets that implements enough of
-    the protocol (namely count() and __iter__) to be useful for indexing
-    large data sets.
-
-    When iterated over, I will:
-        - use qs.iterator() to disable result set caching in queryset.
-        - chunk fetching the results so that caching in database driver
-            (especially psycopg2) is kept to a minimum, and database
-            drivers that do not support streaming (eg. mysql) do not
-            need to load the whole dataset at once.
-    """
-    def __init__(self, qs, chunk_size=10000):
-        self.qs = qs
-        self.chunk_size = chunk_size
-
-    def count(self):
-        """Pass through to underlying queryset"""
-        return self.qs.count()
-
-    def __iter__(self):
-        """Iterate over result set. Internally uses iterator() as not
-        to cache in the queryset; also supports chunking fetching data
-        in smaller sets so that databases that do not use server side
-        cursors (django docs say only postgres and oracle do) or other
-        optimisations keep memory consumption manageable."""
-
-        last_max_pk = None
-
-        # Get a clone of the QuerySet so that the cache doesn't bloat up
-        # in memory. Useful when reindexing large amounts of data.
-        small_cache_qs = self.qs.order_by('pk')
-
-        once = no_data = False
-        while not no_data and not once:
-            # If we got the max seen PK from last batch, use it to restrict the qs
-            # to values above; this optimises the query for Postgres as not to
-            # devolve into multi-second run time at large offsets.
-            if self.chunk_size:
-                if last_max_pk is not None:
-                    current_qs = small_cache_qs.filter(pk__gt=last_max_pk)[:self.chunk_size]
-                else:
-                    current_qs = small_cache_qs[:self.chunk_size]
-            else: # Handle "no chunking"
-                current_qs = small_cache_qs
-                once = True	 # force loop exit after fetching all data
-
-            no_data = True
-            for obj in current_qs.iterator():
-                # Remember maximum PK seen so far
-                last_max_pk = obj.pk
-                no_data = False
-                yield obj
-
-            current_qs = None  # I'm free!
-
 class DocType(DSLDocument):
     def __init__(self, related_instance_to_ignore=None, **kwargs):
         super(DocType, self).__init__(**kwargs)
@@ -134,11 +77,10 @@ class DocType(DSLDocument):
 
     def get_indexing_queryset(self):
         qs = self.get_queryset()
-        # Note: PagingQuerysetProxy handles no chunking, but some tests
-        # check for the qs, so don't interfere.
-        if self.django.queryset_pagination is not None:
-            return PagingQuerysetProxy(qs, chunk_size=self.django.queryset_pagination)
-        return qs
+        kwargs = {}
+        if self.django.queryset_pagination:
+            kwargs = {'chunk_size': self.django.queryset_pagination}
+        return qs.iterator(**kwargs)
 
     def init_prepare(self):
         """
@@ -204,7 +146,9 @@ class DocType(DSLDocument):
 
     def parallel_bulk(self, actions, **kwargs):
         deque(parallel_bulk(client=self._get_connection(), actions=actions, **kwargs), maxlen=0)
-        return (1, [])  # Fake return value to emulate bulk(), not used upstream
+        # Fake return value to emulate bulk() since we don't have a result yet,
+        # the result is currently not used upstream anyway.
+        return (1, [])
 
     def _prepare_action(self, object_instance, action):
         return {
